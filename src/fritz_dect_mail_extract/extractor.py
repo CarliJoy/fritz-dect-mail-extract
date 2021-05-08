@@ -1,12 +1,16 @@
 import getpass
 import logging
 import os
+import re
 from dataclasses import dataclass, fields
 from datetime import datetime
+from io import StringIO
 from pathlib import Path
 from typing import Dict, Generator, List, Optional, Tuple, Union
 
+import dateparser
 import imap_tools
+import pandas as pd
 from imap_tools import ImapToolsError
 
 from .constants import ENV_NAMES
@@ -16,6 +20,8 @@ _logger = logging.getLogger(__name__)
 
 FileName = str
 FileData = Tuple[FileName, bytes]
+
+date_regex = re.compile(r"\d\d[.]\d\d[.]\d\d\d\d")
 
 
 @dataclass
@@ -41,6 +47,26 @@ class MailRawData:
             for field in fields(self)
             if field.name not in ["date", "subject"]
         ]
+
+    @property
+    def subject_date_string(self) -> str:
+        return date_regex.findall(self.subject)[0]
+
+    @property
+    def dataframe(self) -> pd.DataFrame:
+        def my_date_parse(in_str) -> datetime:
+            if len(in_str) == 5:
+                # Only time given so add date
+                in_str = f"{self.subject_date_string} {in_str}"
+            date = dateparser.parse(in_str, languages=["de", "en"])
+            return date
+
+        s = str(self.data_csv[1], "UTF-8")
+
+        df = pd.read_csv(StringIO(s), skiprows=1, sep=";", decimal=",")
+        df["Datum/Uhrzeit"] = df["Datum/Uhrzeit"].apply(my_date_parse)
+        df.set_index("Datum/Uhrzeit", inplace=True)
+        return df
 
 
 def get_user_value(
@@ -173,6 +199,14 @@ def save_to_folder(mail: MailRawData, target_folder: Path):
 
 
 def do_extract(server_data: ServerData, target_folder: Path):
+    df: Optional[pd.DataFrame] = None
     for mail in find_and_extract_mails(server_data):
+        if df is None:
+            df = mail.dataframe
+        else:
+            df = df.append(mail.dataframe)
         save_to_folder(mail, target_folder)
         _logger.info(f"Extracted '{mail.subject}'")
+    combined_path = target_folder / "combined.csv"
+    df.to_csv(combined_path)
+    _logger.info(f"Wrote '{combined_path}'")

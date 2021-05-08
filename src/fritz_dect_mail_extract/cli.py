@@ -122,7 +122,7 @@ def main(args):
             f"The target path '{args.target_folder}' is not a directory."
         )
     try:
-        do_extract(server_data, args.target_folder)
+        do_extract(server_data, args.target_folder.resolve().absolute())
     except ExtractionError as e:
         _logger.error(e)
         exit(1)

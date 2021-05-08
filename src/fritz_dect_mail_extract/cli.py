@@ -23,37 +23,18 @@ References:
 import argparse
 import logging
 import sys
+from pathlib import Path
 
 from fritz_dect_mail_extract import __version__
+from fritz_dect_mail_extract.constants import ENV_NAMES
+from fritz_dect_mail_extract.exceptions import ExtractionError
+from fritz_dect_mail_extract.extractor import do_extract, get_server_data
 
 __author__ = "Carli* Freudenberg"
 __copyright__ = "Carli* Freudenberg"
 __license__ = "MIT"
 
 _logger = logging.getLogger(__name__)
-
-
-# ---- Python API ----
-# The functions defined in this section can be imported by users in their
-# Python scripts/interactive interpreter, e.g. via
-# `from fritz_dect_mail_extract.skeleton import fib`,
-# when using this Python module as a library.
-
-
-def fib(n):
-    """Fibonacci example function
-
-    Args:
-      n (int): integer
-
-    Returns:
-      int: n-th Fibonacci number
-    """
-    assert n > 0
-    a, b = 1, 1
-    for i in range(n - 1):
-        a, b = b, a + b
-    return a
 
 
 # ---- CLI ----
@@ -72,13 +53,28 @@ def parse_args(args):
     Returns:
       :obj:`argparse.Namespace`: command line parameters namespace
     """
-    parser = argparse.ArgumentParser(description="Just a Fibonacci demonstration")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Extract FritzDect status mails (i.e. Energy usage) "
+            "sent from FritzBox via IMAP"
+        )
+    )
     parser.add_argument(
         "--version",
         action="version",
         version="fritz-dect-mail-extract {ver}".format(ver=__version__),
     )
-    parser.add_argument(dest="n", help="n-th Fibonacci number", type=int, metavar="INT")
+    for name, env_value in ENV_NAMES.items():
+        parser.add_argument(
+            f"--{name.lower()}",
+            dest=name.lower(),
+            help=f"IMAP {name.lower()}. Defaults to environmental variable {env_value}",
+            type=str,
+            default=None,
+        )
+    parser.add_argument(
+        "target_folder", help="Path to directory to save files", type=Path
+    )
     parser.add_argument(
         "-v",
         "--verbose",
@@ -111,10 +107,7 @@ def setup_logging(loglevel):
 
 
 def main(args):
-    """Wrapper allowing :func:`fib` to be called with string arguments in a CLI fashion
-
-    Instead of returning the value from :func:`fib`, it prints the result to the
-    ``stdout`` in a nicely formated message.
+    """Run command line
 
     Args:
       args (List[str]): command line parameters as list of strings
@@ -122,9 +115,17 @@ def main(args):
     """
     args = parse_args(args)
     setup_logging(args.loglevel)
-    _logger.debug("Starting crazy calculations...")
-    print("The {}-th Fibonacci number is {}".format(args.n, fib(args.n)))
-    _logger.info("Script ends here")
+    _logger.debug("Starting extraction")
+    server_data = get_server_data(args.server, args.username, args.password)
+    if not args.target_folder.is_dir():
+        raise ExtractionError(
+            f"The target path '{args.target_folder}' is not a directory."
+        )
+    try:
+        do_extract(server_data, args.target_folder)
+    except ExtractionError as e:
+        _logger.error(e)
+        exit(1)
 
 
 def run():

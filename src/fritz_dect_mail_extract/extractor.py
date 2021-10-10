@@ -8,7 +8,6 @@ from io import StringIO
 from pathlib import Path
 from typing import Dict, Generator, List, Optional, Tuple, Union
 
-import dateparser
 import imap_tools
 import pandas as pd
 from imap_tools import ImapToolsError
@@ -58,12 +57,14 @@ class MailRawData:
             if len(in_str) == 5:
                 # Only time given so add date
                 in_str = f"{self.subject_date_string} {in_str}"
-            date = dateparser.parse(in_str, languages=["de", "en"])
+            date = datetime.strptime(in_str, "%d.%m.%Y %H:%M")
             return date
 
         s = str(self.data_csv[1], "UTF-8")
 
-        df = pd.read_csv(StringIO(s), skiprows=1, sep=";", decimal=",")
+        df = pd.read_csv(
+            StringIO(s), skiprows=1, sep=";", decimal=",", usecols=[0, 1, 2]
+        )
         df["Datum/Uhrzeit"] = df["Datum/Uhrzeit"].apply(my_date_parse)
         df.set_index("Datum/Uhrzeit", inplace=True)
         return df
@@ -96,11 +97,16 @@ def get_user_value(
                 pass
             else:
                 # Try to extract password from secret service
-                if password := keyring.get_password(
-                    inputs["server"], inputs["username"]
-                ):
-                    return password
-            return getpass.getpass(ask_string)
+                _logger.info(
+                    f"Getting secret for server: '{inputs['server']}', "
+                    f"user: '{inputs['username']}'"
+                )
+                password = keyring.get_password(inputs["server"], inputs["username"])
+                if not password:
+                    password = getpass.getpass(ask_string)
+                # set password to secret server
+                keyring.set_password(inputs["server"], inputs["username"], password)
+                return password
         else:
             return input(ask_string)
     raise ValueError(f"Value for '{var_name}' was not given!")

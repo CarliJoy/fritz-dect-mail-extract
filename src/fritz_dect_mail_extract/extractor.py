@@ -74,7 +74,7 @@ def get_user_value(
     var_name: str,
     inputs: Dict[str, Optional[str]],
     *,
-    interactive,
+    interactive: bool,
     secure: bool = False,
 ) -> str:
     """
@@ -101,11 +101,19 @@ def get_user_value(
                     f"Getting secret for server: '{inputs['server']}', "
                     f"user: '{inputs['username']}'"
                 )
-                password = keyring.get_password(inputs["server"], inputs["username"])
+                password = ""
+                try:
+                    password = keyring.get_password(inputs["server"], inputs["username"])
+                except Exception as e:
+                    _logger.exception("Failed to get password with keyring", exc_info=e)
                 if not password:
                     password = getpass.getpass(ask_string)
-                # set password to secret server
-                keyring.set_password(inputs["server"], inputs["username"], password)
+
+                try:
+                    # set password to secret server
+                    keyring.set_password(inputs["server"], inputs["username"], password)
+                except Exception as e:
+                    _logger.exception("Failed save password in keyring", exc_info=e)
                 return password
         else:
             return input(ask_string)

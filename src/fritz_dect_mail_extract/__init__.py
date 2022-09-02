@@ -1,5 +1,5 @@
-from importlib_metadata import (PackageNotFoundError,  # pragma: no cover
-                                version)
+from importlib_metadata import PackageNotFoundError  # pragma: no cover
+from importlib_metadata import version
 
 try:
     # Change here if project is renamed and does not equal the package name

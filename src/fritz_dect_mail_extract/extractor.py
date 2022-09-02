@@ -101,9 +101,11 @@ def get_user_value(
                     f"Getting secret for server: '{inputs['server']}', "
                     f"user: '{inputs['username']}'"
                 )
-                password = ""
+                password = ""  # nosec
                 try:
-                    password = keyring.get_password(inputs["server"], inputs["username"])
+                    password = keyring.get_password(
+                        inputs["server"], inputs["username"]
+                    )
                 except Exception as e:
                     _logger.exception("Failed to get password with keyring", exc_info=e)
                 if not password:
@@ -206,13 +208,13 @@ def save_file(target_folder: Path, key: str, mail: MailRawData) -> str:
     return str(file_path.absolute())
 
 
-def save_to_folder(mail: MailRawData, target_folder: Path):
+def save_to_folder(mail: MailRawData, target_folder: Path) -> None:
     for field in mail.file_fields:
         file = save_file(target_folder, field, mail)
         _logger.debug(f"Saved '{file}'")
 
 
-def do_extract(server_data: ServerData, target_folder: Path):
+def do_extract(server_data: ServerData, target_folder: Path) -> None:
     df: Optional[pd.DataFrame] = None
     for mail in find_and_extract_mails(server_data):
         if df is None:
